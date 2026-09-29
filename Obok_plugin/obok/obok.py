@@ -428,20 +428,34 @@ class KoboLibrary(object):
     def __getmacaddrs (self):
         """The list of all MAC addresses on this machine."""
         macaddrs = []
+
         if sys.platform.startswith('win'):
-            c = re.compile('\s?(' + '[0-9a-f]{2}[:\-]' * 5 + '[0-9a-f]{2})(\s|$)', re.IGNORECASE)
-            try: 
-                output = subprocess.Popen('ipconfig /all', shell=True, stdout=subprocess.PIPE, text=True).stdout
-                for line in output:
-                    m = c.search(line)
-                    if m:
-                        macaddrs.append(re.sub("-", ":", m.group(1)).upper())
-            except:
-                output = subprocess.Popen('wmic nic where PhysicalAdapter=True get MACAddress', shell=True, stdout=subprocess.PIPE, text=True).stdout
-                for line in output:
-                    m = c.search(line)
-                    if m:
-                        macaddrs.append(re.sub("-", ":", m.group(1)).upper())
+            c = re.compile(
+                r'\s?(' + '[0-9a-f]{2}[:\-]' * 5 + '[0-9a-f]{2})(\s|$)',
+                re.IGNORECASE
+            )
+
+            ps_cmd = (
+                'powershell -NoProfile -Command '
+                '"Get-CimInstance Win32_NetworkAdapter | '
+                'Where-Object { $_.PhysicalAdapter -eq $true } | '
+                'Select-Object -ExpandProperty MACAddress"'
+            )
+
+            output = subprocess.Popen(
+                ps_cmd,
+                shell=True,
+                stdout=subprocess.PIPE,
+                text=True
+            ).stdout
+
+            for line in output:
+                m = c.search(line)
+                if m:
+                    macaddrs.append(
+                        re.sub("-", ":", m.group(1)).upper()
+                    )
+
         elif sys.platform.startswith('darwin'):
             c = re.compile('\s(' + '[0-9a-f]{2}:' * 5 + '[0-9a-f]{2})(\s|$)', re.IGNORECASE)
             output = subprocess.check_output('/sbin/ifconfig -a', shell=True, encoding='utf-8')
@@ -449,15 +463,9 @@ class KoboLibrary(object):
             for m in matches:
                 # print "m:{0}".format(m[0])
                 macaddrs.append(m[0].upper())
-        elif sys.platform.startswith('linux'):
-            for interface in os.listdir('/sys/class/net'):
-                with open('/sys/class/net/' + interface + '/address', 'r') as f:
-                    mac = f.read().strip().upper()
-                # some interfaces, like Tailscale's VPN interface, do not have a MAC address
-                if mac != '':
-                    macaddrs.append(mac)
         else:
-            # final fallback
+            # probably linux
+
             # let's try ip
             c = re.compile('\s(' + '[0-9a-f]{2}:' * 5 + '[0-9a-f]{2})(\s|$)', re.IGNORECASE)
             for line in os.popen('ip -br link'):
