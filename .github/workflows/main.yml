@@ -1,4 +1,4 @@
-name: Package plugin
+name: Build DeDRM Release
 
 on:
   push:
